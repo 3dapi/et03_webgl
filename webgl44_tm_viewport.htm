@@ -1,0 +1,109 @@
+<html>
+<head>
+<title>GLC WebGL</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript">
+
+
+// global common variable
+
+var gl;											// gl context object
+var mouse = {x: 0, y: 0};						// mouse position
+
+
+function WebGLInit(native_win)
+{
+	native_win.addEventListener('mousemove', function(e)
+	{
+		var rect = native_win.getBoundingClientRect();
+
+		mouse.x = e.clientX - rect.left;
+		mouse.y = e.clientY - rect.top;
+	}, false);
+
+	setInterval("WebGLRender()", 0);
+
+	gl.clearColor(0.0, 0.4, 0.6, 1.0);
+}
+
+
+
+var angle = 0.0;
+
+function WebGLRender()
+{
+	gl.enable(gl.SCISSOR_TEST);
+	gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+	gl.scissor (0, 0, gl.viewportWidth, gl.viewportHeight);
+
+	gl.clearColor(1.0, 0.8, 0.6, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	var vpW = gl.viewportWidth/2.0 - 1.0;
+	var vpH = gl.viewportHeight/2.0 - 1.0;
+
+
+	gl.viewport(0, 0, vpW, vpH);
+	gl.scissor (0, 0, vpW, vpH);
+	gl.clearColor(0.0, 0.0, 0.3, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	
+	gl.viewport(1.0 + gl.viewportWidth/2, 0, vpW, vpH);
+	gl.scissor (1.0 + gl.viewportWidth/2, 0, vpW, vpH);
+	gl.clearColor(0.0, 0.4, 0.0, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	
+	gl.viewport(0, 1.0 + gl.viewportHeight/2, vpW, vpH);
+	gl.scissor (0, 1.0 + gl.viewportHeight/2, vpW, vpH);
+	gl.clearColor(0.0, 0.6, 0.4, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+
+
+	gl.viewport(1.0 + gl.viewportWidth/2, 1.0 + gl.viewportHeight/2, vpW, vpH);
+	gl.scissor (1.0 + gl.viewportWidth/2, 1.0 + gl.viewportHeight/2, vpW, vpH);
+	gl.clearColor(0.0, 0.8, 0.4, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	
+	gl.flush();
+}
+
+
+function WebGLStart()
+{
+	document.body.style.border  = 'none';
+	document.body.style.margin  = '0';
+	document.body.style.padding = '0';
+
+	var native_win = document.createElement("canvas");
+	native_win.width  = 800;
+	native_win.height = 480;
+	document.body.appendChild(native_win);
+
+	try
+	{
+		gl = native_win.getContext("experimental-webgl");
+		gl.viewportWidth  = native_win.width;
+		gl.viewportHeight = native_win.height;
+	}
+	catch (e){}
+
+	if (!gl)
+	{
+		alert("Could not initialise WebGL. check the browser");
+		return;
+	}
+
+	WebGLInit(native_win);
+
+	setInterval("WebGLRender()", 0);
+}
+</script>
+</head>
+
+<body onload="WebGLStart();">
+</body>
+</html>

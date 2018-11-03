@@ -1,0 +1,279 @@
+<html>
+<head>
+<title>GLC WebGL</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script language="javascript" type="text/javascript" src="./webgl_util.js"></script>
+<script language="javascript" type="text/javascript" src="rsc/gsd_geo.js"></script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+	attribute vec4      at_pos;
+	attribute vec3      at_nor;
+	attribute vec2      at_tex;
+
+	varying   vec3      vr_nor;
+	varying   vec2      vr_tex;
+
+	uniform   mat4      um_Wld;
+	uniform   mat4      um_Viw;
+	uniform   mat4      um_Prj;
+
+	void main() {
+		vec4 pos    = um_Wld * at_pos;
+		pos         = um_Viw * pos;
+		pos         = um_Prj * pos;
+		gl_Position = pos;
+
+		vr_nor      = vec3(um_Wld * vec4(at_nor, 0.0));
+		vr_tex      = at_tex;
+	}
+</script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+	varying   vec3      vr_nor;
+	varying   vec2      vr_tex;
+
+	uniform   vec3      lgt_dir;						// lighting direction
+
+	uniform   sampler2D us_htc0;						// sampler for hatching texture
+	uniform   sampler2D us_htc1;						// sampler for hatching texture
+	uniform   sampler2D us_htc2;						// sampler for hatching texture
+	uniform   sampler2D us_htc3;						// sampler for hatching texture
+	uniform   sampler2D us_htc4;						// sampler for hatching texture
+	uniform   sampler2D us_htc5;						// sampler for hatching texture
+
+    void main() {
+		vec4	ret = vec4(0.0, 0.0, 0.0, 1.0);
+		vec3	nor = normalize(vr_nor);
+		float	lam = clamp(dot(-lgt_dir, nor), 0.0, 1.0);
+
+		float	htcLvl = lam * 5.5;						// determin Hatching Level
+
+		float	htcWgt = 3.0;
+
+		// Hatching Weight
+		float	htch0 = 0.0;
+		float	htch1 = 0.0;
+		float	htch2 = 0.0;
+		float	htch3 = 0.0;
+		float	htch4 = 0.0;
+		float	htch5 = 0.0;
+
+
+		// map tone to quantized palette
+		if(htcLvl > 5.0)
+		{
+			htch0 = 1.0;
+		}
+		else if(htcLvl > 4.0)
+		{
+			htch0 = 1.0 - (5.0 - htcLvl);
+			htch1 = 1.0 - htch0;
+		}
+		else if(htcLvl > 3.0)
+		{
+			htch1 = 1.0 - (4.0 - htcLvl);
+			htch2 = 1.0 - htch1;
+		}
+		else if(htcLvl > 2.0)
+		{
+			htch2 = 1.0 - (3.0 - htcLvl);
+			htch3 = 1.0 - htch2;
+		}
+		else if(htcLvl > 1.0)
+		{
+			htch3 = 1.0 - (2.0 - htcLvl);
+			htch4 = 1.0 - htch3;
+		}
+		else
+		{
+			htch4 = 1.0 - (1.0 - htcLvl);
+			htch5 = 1.0 - htch4;
+		}
+
+		vec4 tot= vec4(0.0, 0.0, 0.0, 0.0);
+
+		vec4 t0 = texture2D(us_htc0, vr_tex*htcWgt) * htch0;
+		vec4 t1 = texture2D(us_htc1, vr_tex*htcWgt) * htch1;
+		vec4 t2 = texture2D(us_htc2, vr_tex*htcWgt) * htch2;
+		vec4 t3 = texture2D(us_htc3, vr_tex*htcWgt) * htch3;
+		vec4 t4 = texture2D(us_htc4, vr_tex*htcWgt) * htch4;
+		vec4 t5 = texture2D(us_htc5, vr_tex*htcWgt) * htch5;
+
+		tot  = t0 + t1 + t2 + t3 + t4 + t5;
+		tot.a = 1.0;
+
+		gl_FragColor = tot;
+    }
+</script>
+
+
+<script type="text/javascript">
+
+// global common variable
+
+var gl;											// gl context object
+var mouse = {x: 0, y: 0};						// mouse position
+
+var g_program;									// shader program
+
+var vbo_pos;
+var vbo_nor;
+var vbo_tex;
+var ibo_idx ;									// front face
+
+var tex_htc0;
+var tex_htc1;
+var tex_htc2;
+var tex_htc3;
+var tex_htc4;
+var tex_htc5;
+
+var cam_pos = [0, 20, -30];
+var cam_look= [0, 0,   0 ];
+
+function WebGLInit(native_win)
+{
+	native_win.addEventListener('mousemove', function(e)
+	{
+		var rect = native_win.getBoundingClientRect();
+
+		mouse.x = e.clientX - rect.left;
+		mouse.y = e.clientY - rect.top;
+
+		//document.title= "mouse: " + mouse.x + ", " + mouse.y;
+	}, false);
+
+	window.addEventListener('keydown', function(e)
+	{
+		//document.title= "Keycode: " + e.keyCode;
+
+		if(87 == e.keyCode){ cam_pos [2] += 1.0;	cam_look[2] += 1.0; }	//'W'
+		if(83 == e.keyCode){ cam_pos [2] -= 1.0;	cam_look[2] -= 1.0; }	//'S'
+		if(65 == e.keyCode){ cam_pos [0] -= 1.0;	cam_look[0] -= 1.0; }	//'A'
+		if(68 == e.keyCode){ cam_pos [0] += 1.0;	cam_look[0] += 1.0; }	//'D'
+	}, true);
+
+	setInterval("WebGLRender()", 0);
+
+	gl.clearColor(0.0, 0.4, 0.6, 1.0);
+
+
+	// create program
+	g_program = CreateProgram(gl, "shader-vs", "shader-fs");
+	if(null == g_program)
+		return;
+
+
+	// create VBO and IBO
+	vbo_pos  = CreateVbo(gl, gsd_buf_pos );
+	vbo_nor  = CreateVbo(gl, gsd_buf_nor );
+	vbo_tex  = CreateVbo(gl, gsd_buf_tex );
+	ibo_idx  = CreateIbo(gl, gsd_buf_idx );
+
+
+	// create toon texture
+	tex_htc0 = CreateTexture("rsc/stroke0.png");
+	tex_htc1 = CreateTexture("rsc/stroke1.png");
+	tex_htc2 = CreateTexture("rsc/stroke2.png");
+	tex_htc3 = CreateTexture("rsc/stroke3.png");
+	tex_htc4 = CreateTexture("rsc/stroke4.png");
+	tex_htc5 = CreateTexture("rsc/stroke5.png");
+}
+
+
+
+var angle = 0.0;
+
+function WebGLRender()
+{
+	gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	gl.enable( gl.DEPTH_TEST);												// enable depth test
+	gl.disable( gl.CULL_FACE );												// enable culling face
+
+
+	angle += 0.25;
+
+	var rad = -angle * Math.PI/180.0;
+	var cosF = Math.cos(rad);
+	var sinF = Math.sin(rad);
+
+	var um_Wld =
+	[
+		cosF , 0.0, sinF, 0.0,
+		0.0  , 1.0, 0.0 , 0.0,
+		-sinF, 0.0, cosF, 0.0,
+		0.0  , 0.0, 0.0 , 1.0,
+	];
+
+
+	var um_Viw = GluLookAt(cam_pos[0], cam_pos[1], cam_pos[2], cam_look[0],cam_look[1], cam_look[2], 0,1,0);
+	var um_Prj = GluPerspective(45.0, 800.0/480.0, 1.0, 5000.0);
+
+
+	UsePrgram(gl, g_program);
+
+	ActiveTexture(gl, g_program, tex_htc0, 0, "us_htc0");
+	ActiveTexture(gl, g_program, tex_htc1, 1, "us_htc1");
+	ActiveTexture(gl, g_program, tex_htc2, 2, "us_htc2");
+	ActiveTexture(gl, g_program, tex_htc3, 3, "us_htc3");
+	ActiveTexture(gl, g_program, tex_htc4, 4, "us_htc4");
+	ActiveTexture(gl, g_program, tex_htc5, 5, "us_htc5");
+
+	UniformMatrix(gl, g_program, "um_Wld", um_Wld);
+	UniformMatrix(gl, g_program, "um_Viw", um_Viw);
+	UniformMatrix(gl, g_program, "um_Prj", um_Prj);
+
+	var lgt_dir = [0, -0.707,  0.707];
+	UniformVec3(gl, g_program, "lgt_dir", lgt_dir);
+
+	AttributeStream(gl, 0, vbo_pos, 3);
+	AttributeStream(gl, 1, vbo_nor, 3);
+	AttributeStream(gl, 2, vbo_tex, 2);
+
+	BindIbo(gl, ibo_idx );
+	DrawElement(gl, gl.TRIANGLES, gsd_buf_idx.length);
+
+	AttributeStream(gl, 0, null, 0);
+	AttributeStream(gl, 1, null, 0);
+	AttributeStream(gl, 2, null, 0);
+	BindIbo(gl, null);
+
+
+	ActiveTexture(gl, g_program, null, 0);
+	ActiveTexture(gl, g_program, null, 1);
+	ActiveTexture(gl, g_program, null, 2);
+	ActiveTexture(gl, g_program, null, 3);
+	ActiveTexture(gl, g_program, null, 4);
+	ActiveTexture(gl, g_program, null, 5);
+
+	UsePrgram(gl, null);
+
+	gl.flush();
+}
+
+
+function WebGLStart()
+{
+	var native_win = CreateNativeWindow("canvas", 800, 480);
+
+	gl = CreateContext(native_win);
+	if(!gl)
+	{
+		alert("Could not initialise WebGL. check the browser");
+		return;
+	}
+
+
+	WebGLInit(native_win);
+}
+</script>
+</head>
+
+<body onload="WebGLStart();">
+</body>
+</html>

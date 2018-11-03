@@ -1,0 +1,50 @@
+<html>
+<head>
+<title>GLC WebGL</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript">
+
+// global common variable
+var gl;
+
+function WebGLStart()
+{
+	// get the static native_win
+	var native_win = document.getElementById("canvas");
+
+
+	// initialize gl context
+	try
+	{
+		gl = native_win.getContext("experimental-webgl");
+		gl.viewportWidth  = native_win.width;
+		gl.viewportHeight = native_win.height;
+	}
+	catch (e)
+	{
+	}
+
+	if (!gl)
+	{
+		alert("Could not initialise WebGL. check the browser");
+	}
+
+
+	// simple draw
+	r = Math.random();
+	g = Math.random();
+	b = Math.random();
+
+	gl.clearColor(r, g, b, 1.0);
+	gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+}
+
+</script>
+</head>
+
+<body onload="WebGLStart();" style="border:none;margin:0;padding:0">
+	<canvas id="canvas" width ="800" height="480">
+</body>
+</html>

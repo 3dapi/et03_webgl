@@ -1,0 +1,256 @@
+<html>
+<head>
+<title>GLC WebGL</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+<script id="shader-vs" type="x-shader/x-vertex">
+	attribute vec3      at_pos;							// input position from rendering pipe line
+	attribute vec4      at_dif;							// input diffuse from rendering pipe line
+	attribute vec2      at_tex;							// input texture coordinate from rendering pipe line
+
+	varying   vec4      vr_dif;							// output from vertex processing
+	varying   vec2      vr_tex;							// output to fragment processing for texture coordinate
+
+	void main(void) {
+		gl_Position = vec4(at_pos, 1.0);
+		vr_dif = at_dif;
+		vr_tex = at_tex;
+	}
+</script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+	varying   vec4      vr_dif;							// input from vertex processing
+	varying   vec2      vr_tex;							// input to fragment processing for texture coordinate
+
+	uniform   sampler2D us_tex;							// sampler for texture
+
+    void main(void) {
+
+		vec4 ct0     = texture2D(us_tex, vr_tex);		// sampling from texture with coordinate
+        gl_FragColor = ct0 * vr_dif* 2.0;
+    }
+</script>
+
+
+<script type="text/javascript">
+
+function FindShader(gl, id)								// find the shader script
+{
+	var shaderScript = document.getElementById(id);
+	if (!shaderScript)
+	{
+		return null;
+	}
+
+	var str = "";
+	var k = shaderScript.firstChild;
+	while (k)
+	{
+		if (k.nodeType == 3)							// text node type
+		{
+			str += k.textContent;
+		}
+		k = k.nextSibling;
+	}
+
+	var shader;
+	if (shaderScript.type == "x-shader/x-fragment")
+	{
+		shader = gl.createShader(gl.FRAGMENT_SHADER);
+	}
+	else if (shaderScript.type == "x-shader/x-vertex")
+	{
+		shader = gl.createShader(gl.VERTEX_SHADER);
+	}
+	else
+	{
+		return null;
+	}
+
+	gl.shaderSource(shader, str);
+	gl.compileShader(shader);
+
+	if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+	{
+		alert(gl.getShaderInfoLog(shader));
+		return null;
+	}
+
+	return shader;
+}
+
+
+
+// global common variable
+
+var gl;													// gl context object
+var mouse = {x: 0, y: 0};								// mouse position
+
+var wgb_pos;
+var wgb_dif;
+var wgb_tex;
+var tex_galic;
+var g_program;											// shader program
+
+
+var vtx_pos =
+[
+   -0.9, -0.9,  0.0,
+	0.9, -0.9,  0.0,
+	0.9,  0.9,  0.0,
+   -0.9,  0.9,  0.0
+];
+
+var vtx_dif =
+[
+   1.0, 0.0, 0.0, 1.0,
+   0.0, 1.0, 0.0, 1.0,
+   0.0, 0.0, 1.0, 1.0,
+   1.0, 0.0, 1.0, 1.0
+];
+
+var vtx_tex =
+[
+   0.0, 1.0,
+   1.0, 1.0,
+   1.0, 0.0,
+   0.0, 0.0
+];
+
+
+function WebGLInit(native_win)
+{
+	native_win.addEventListener('mousemove', function(e)
+	{
+		var rect = native_win.getBoundingClientRect();
+
+		mouse.x = e.clientX - rect.left;
+		mouse.y = e.clientY - rect.top;
+	}, false);
+
+	setInterval("WebGLRender()", 0);
+
+	gl.clearColor(0.0, 0.4, 0.6, 1.0);
+
+
+	// create program
+	var shader_vtx = FindShader(gl, "shader-vs");	//alert(shader_vtx);
+	var shader_frg = FindShader(gl, "shader-fs");	//alert(shader_frg);
+
+	g_program = gl.createProgram();
+	gl.attachShader(g_program, shader_vtx);
+	gl.attachShader(g_program, shader_frg);
+	gl.linkProgram(g_program);
+
+	if (!gl.getProgramParameter(g_program, gl.LINK_STATUS))
+	{
+		alert("Could not initialise shaders");
+	}
+
+
+	// create sqare vertexbuffer position, diffuse, texture
+	wgb_pos = gl.createBuffer();	gl.bindBuffer(gl.ARRAY_BUFFER, wgb_pos);	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vtx_pos), gl.STATIC_DRAW);
+	wgb_dif = gl.createBuffer();	gl.bindBuffer(gl.ARRAY_BUFFER, wgb_dif);	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vtx_dif), gl.STATIC_DRAW);
+	wgb_tex = gl.createBuffer();	gl.bindBuffer(gl.ARRAY_BUFFER, wgb_tex);	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vtx_tex), gl.STATIC_DRAW);
+
+	// create texture
+	tex_galic = gl.createTexture();
+	tex_galic.image = new Image();
+	tex_galic.image.src = "rsc/galic.png";
+	tex_galic.image.onload = function() { TextureOnLoad(tex_galic); }
+}
+
+
+function TextureOnLoad(texture)
+{
+	console.log("TextureOnLoad, image = " + texture.image);
+
+	gl.bindTexture(gl.TEXTURE_2D, texture);
+
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+
+	gl.generateMipmap(gl.TEXTURE_2D);
+	gl.bindTexture(gl.TEXTURE_2D, null);
+}
+
+
+function WebGLRender()
+{
+	gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	gl.disable( gl.DEPTH_TEST);												// disable depth test
+	gl.disable( gl.CULL_FACE );												// disalbe culling face
+
+
+	gl.useProgram(g_program);												// use program
+
+	gl.enableVertexAttribArray(0);	gl.bindBuffer(gl.ARRAY_BUFFER, wgb_pos);	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(1);	gl.bindBuffer(gl.ARRAY_BUFFER, wgb_dif);	gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(2);	gl.bindBuffer(gl.ARRAY_BUFFER, wgb_tex);	gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
+
+
+	gl.activeTexture(gl.TEXTURE0);
+	gl.bindTexture(gl.TEXTURE_2D, tex_galic);
+	gl.uniform1i(gl.getUniformLocation(g_program, "us_tex"), 0);
+
+	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);									// draw..
+
+
+	// disable client-side capability
+	gl.disableVertexAttribArray(0);
+	gl.disableVertexAttribArray(1);
+	gl.disableVertexAttribArray(2);
+
+	gl.bindTexture(gl.TEXTURE_2D, null);
+	gl.useProgram(null);													// use program
+
+	gl.flush();
+}
+
+
+function WebGLStart()
+{
+	// setup the body
+	document.body.style.border  = 'none';
+	document.body.style.margin  = '0';
+	document.body.style.padding = '0';
+
+	// create the dynamic native_win
+	var native_win = document.createElement("canvas");
+	native_win.width  = 800;
+	native_win.height = 480;
+	document.body.appendChild(native_win);
+
+	// initialize gl context
+	try
+	{
+		gl = native_win.getContext("experimental-webgl");
+		gl.viewportWidth  = native_win.width;
+		gl.viewportHeight = native_win.height;
+	}
+	catch (e)
+	{
+	}
+
+	if (!gl)
+	{
+		alert("Could not initialise WebGL. check the browser");
+	}
+
+	setInterval("WebGLRender()", 0);
+
+
+	WebGLInit(native_win);
+}
+</script>
+</head>
+
+<body onload="WebGLStart();">
+</body>
+</html>

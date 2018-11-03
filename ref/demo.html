@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Copyright � Microsoft Corporation. All Rights Reserved. -->
+  <!-- Demo Author: Frank Olivier, Microsoft Corporation -->   
+  <!-- Updates by Jay Munro -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+   <title>Photo warping with WebGL</title>
+  <style>
+  /* Prevent text selection from being displayed when the user drags out of the canvas */
+*::selection {
+  background:transparent;
+}
+
+#DemoContent {
+  margin-top:10px;
+}
+
+#DemoContent {
+  width:600px;
+  margin-left:auto;
+  margin-right:auto;
+  margin-top:10px;
+}
+
+#Details {
+  margin-top:10px;
+  margin-bottom:10px;
+  padding:20px;
+   border-radius:4px;
+}
+
+body {
+ -ms-user-select: none; /* turn off user selection */
+ font-size: 12pt;
+}
+
+canvas {
+  -ms-touch-action: none; /* turn off panning and zooming */
+}
+
+.heading
+{
+  font-size: 20pt;
+  font-weight: normal;
+}
+
+#ErrorMessage {
+  position:absolute;
+  top:100px;
+  left:20%;
+  right:20%;
+  background-color:lightcoral;
+  padding:20px;
+  border-radius:4px;
+}
+
+  </style>
+
+
+</head>
+<body>
+  <h1 id="DemoTitle">
+    Photo warping with WebGL
+  </h1>
+  <h2>click and drag</h2>
+  
+  <div id="DemoContent">
+    <div style='width:600px; height:600px'>
+        <div style='position: relative'>          
+        <!-- WebGL canvas -->
+        <canvas style='position: absolute' id='webglcanvas' width='600' height='600'></canvas>
+  
+        <!-- notation cavas --> 
+          <canvas style='position: absolute' id='2dcanvas' width='600' height='600'></canvas>
+        </div>
+    </div>
+    <div style="text-align:center">
+      
+      <button id="openphoto1" onclick="OpenPhoto1()">Open a photo</button>      
+      <span id="openphoto2" style="display:none">Pick a photo: <input type="file" id="files" /></span> <br />
+      <button onclick="undo()">Undo</button>         
+      <button onclick="reset()">Start over</button>        
+      <button onclick="save()">Save</button>      
+    </div>
+  </div>
+  
+  <div id="ErrorMessage" style="display:none">
+    <div class="heading">Sorry!</div>
+      This demonstation requires a browser with WebGL support.
+    </div>
+    <div id="log"></div>
+  
+   <div id="Details">
+      <div class="heading">WebGL 101</div>        
+      To render the warped photo above, a mesh of 400 triangle coordinates, a photo, a vertex & 
+      fragment shader program and uniform points are uploaded to the GPU using WebGL.<br />                                      
+      <br />        
+   <!-- The show uniform points checkbox -->
+      <label><input type="checkbox" name="showUniforms" id="showUniforms" onchange="renderer.changeMode();renderer.render()" />Show uniform points</label> 
+      <div>
+        <label><input type="radio" name="rendertype" id="renderLines" onclick="renderer.render()" />Show triangle mesh</label>
+        <label><input type="radio" name="rendertype" id="renderTriangles" onclick="renderer.render()" checked />Show rendered photo</label>
+      </div>
+        <br />
+      When you click and drag on the photo, new uniform points are set on the GPU...<br /><br />
+      <div class="heading">Vertex shader</div>
+      <img src="vertex.png"/><br />
+      ...The GPU runs the vertex shader below to distort the mesh using the uniform points...<br /><br />
+      <pre id="vertexshadersource"></pre>
+        <br />
+      <div class="heading">Fragment shader</div>
+        <img src="fragment.png"/><br />
+        ...and the fragment shader paints photo pixels using the distorted mesh.<br /><br />        
+        <pre id="fragmentshadersource"></pre>        
+        <br />
+        <!-- For more information on WebGL, see <a href="http://docs.webplatform.org/wiki/webgl">webplatform.org</a>.</div> -->
+  </div>
+  
+    <script type="text/javascript" src="demo.js"></script>
+
+
+  <script id="2d-vertex-shader" type="x-shader/x-vertex">
+
+     // outgoing coordinate
+    varying vec2 v_texCoord;
+
+    // incoming coordinate (point)
+    attribute vec2 a_texCoord;  
+    
+    // maximum number of changes to grid
+    #define MAXPOINTS 10 
+    
+    uniform vec2 p1[MAXPOINTS];    // Where the drag started
+    uniform vec2 p2[MAXPOINTS];    // Where the drag ended
+
+    void main() { 
+      
+      v_texCoord = a_texCoord;  
+      // Set up position variable with current coordinate normalized from 0 - 1 to -1 to 1 range 
+      vec2 position = a_texCoord * 2.0 - 1.0; 
+
+      for (int i = 0; i < MAXPOINTS; i++) // loop through 
+      {
+        float dragdistance = distance(p1[i], p2[i]); // Calculate the distance between two start and end of mouse drag for each of the drags
+        float mydistance = distance(p1[i], position);  // Calculate the distance between the start of the mouse drag and the last position  
+        if (mydistance < dragdistance) 
+        {
+          vec2 maxdistort = (p2[i] - p1[i]) / 4.0;    // only affect vertices within 4 x the drag distance ( 
+          float normalizeddistance = mydistance / dragdistance;                
+          float normalizedimpact = (cos(normalizeddistance*3.14159265359)+1.0)/2.0;
+          position += (maxdistort * normalizedimpact);  
+        }
+      }
+    // gl_Position always specifies where to render this vector 
+      gl_Position = vec4(position, 0.0, 1.0);     // x,y,z,
+    }
+  </script>
+
+<!-- fragment shader -->
+<script id="2d-fragment-shader" type="x-shader/x-fragment">
+precision mediump float;
+
+  // uniform to use for texture 
+  uniform sampler2D u_image;
+
+  // Output of the vertex shader 
+  varying vec2 v_texCoord;
+
+  void main() {
+    // gl_FragColor always specifies the color to make the current pixel 
+    gl_FragColor = texture2D(u_image, v_texCoord);                                                   
+  }
+</script>
+<!-- fragment shader -->
+<script id="red" type="x-shader/x-fragment">
+  precision mediump float;
+
+  varying vec2 v_texCoord;
+
+  // Set a solid color for the grid 
+  void main() {
+    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  } 
+</script>
+
+</body>
+</html>

@@ -1,0 +1,364 @@
+<html>
+<head>
+<title>GLC WebGL</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script id="shader-vs" type="x-shader/x-vertex">
+	attribute vec4      at_pos;							// input position from rendering pipe line
+
+	varying   vec4      vr_dif;							// output to fragment processing
+
+	uniform   mat4      um_Wld;							// input transfrom world
+	uniform   mat4      um_Viw;							// input transfrom View
+	uniform   mat4      um_Prj;							// input transfrom Projection
+
+	uniform   vec4      uc_dif;							// input diffuse color
+
+	void main(void) {
+		vec4 pos    = um_Wld * at_pos;					// world transform
+		pos         = um_Viw * pos;						// view trasform
+		pos         = um_Prj * pos;						// projection transform
+		gl_Position = pos;
+
+		vr_dif = uc_dif;
+	}
+</script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+	varying   vec4      vr_dif;							// input from vertex processing
+
+    void main(void) {
+        gl_FragColor = vr_dif;
+    }
+</script>
+
+
+<script type="text/javascript">
+
+function FindShader(gl, id)								// find the shader script
+{
+	var shaderScript = document.getElementById(id);
+	if (!shaderScript)
+	{
+		return null;
+	}
+
+	var str = "";
+	var k = shaderScript.firstChild;
+	while (k)
+	{
+		if (k.nodeType == 3)							// text node type
+		{
+			str += k.textContent;
+		}
+		k = k.nextSibling;
+	}
+
+	var shader;
+	if (shaderScript.type == "x-shader/x-fragment")
+	{
+		shader = gl.createShader(gl.FRAGMENT_SHADER);
+	}
+	else if (shaderScript.type == "x-shader/x-vertex")
+	{
+		shader = gl.createShader(gl.VERTEX_SHADER);
+	}
+	else
+	{
+		return null;
+	}
+
+	gl.shaderSource(shader, str);
+	gl.compileShader(shader);
+
+	if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+	{
+		alert(gl.getShaderInfoLog(shader));
+		return null;
+	}
+
+	return shader;
+}
+
+
+function MyGluPerspective(Fov, Aspect, Near, Far)
+{
+	var Out = new Array(16);
+
+	var COT  = Math.tan(Fov/2. * 3.14159265358979/180.0 );
+
+	COT = 1.0/COT;
+
+	Out[ 0]=  COT/Aspect;	Out[ 1]= 0.0     ;	Out[ 2]= 0.0                   ;    Out[ 3]= 0.0;
+	Out[ 4]= 0.0        ;	Out[ 5]=  COT    ;	Out[ 6]= 0.0                   ;	Out[ 7]= 0.0;
+	Out[ 8]= 0.0        ;	Out[ 9]= 0.0     ;	Out[10]= -(Far+Near)/(Far-Near);	Out[11]= -1.0;
+	Out[12]= 0.0        ;	Out[13]= 0.0     ;	Out[14]= -2*Far*Near/(Far-Near);	Out[15]= 0.0;
+
+	return Out;
+}
+
+
+function Vec3Normalize(v)
+{
+	var r;
+
+	r = Math.sqrt( v[0]*v[0] + v[1]*v[1] + v[2]*v[2] );
+	if (r == 0.0)
+		return v;
+
+	r = 1.0/r;
+	v[0] *= r; v[1] *= r; v[2] *= r;
+	return v;
+}
+
+
+function Vec3Cross(Out, v1, v2)
+{
+	Out[0] = v1[1] * v2[2] - v1[2] * v2[1];
+	Out[1] = v1[2] * v2[0] - v1[0] * v2[2];
+	Out[2] = v1[0] * v2[1] - v1[1] * v2[0];
+
+	return Out;
+}
+
+function Vec3Dot(v1, v2)
+{
+	return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
+}
+
+
+function MyGluLookAt(EyeX, EyeY, EyeZ, AtX, AtY, AtZ, UpX, UpY, UpZ)
+{
+	var Out = new Array(16);
+
+	var Eye =[EyeX, EyeY, EyeZ];
+	var AxisX=[0,0,0];
+	var AxisY=[UpX, UpY, UpZ]
+	var AxisZ=[0,0,0];
+
+	AxisZ[0] = EyeX - AtX;			// Z = Eye - LookAt
+	AxisZ[1] = EyeY - AtY;
+	AxisZ[2] = EyeZ - AtZ;
+
+	AxisZ = Vec3Normalize(AxisZ);
+	AxisX = Vec3Cross(AxisX, AxisY, AxisZ);	// X = Y ^ Z
+	AxisX = Vec3Normalize(AxisX);
+
+	AxisY = Vec3Cross(AxisY, AxisZ, AxisX);	// Y = Z ^ X
+
+	Out[ 0]= AxisX[0];	Out[ 1]= AxisY[0];	Out[ 2]= AxisZ[0];	Out[ 3]= 0.0;
+	Out[ 4]= AxisX[1];	Out[ 5]= AxisY[1];	Out[ 6]= AxisZ[1];	Out[ 7]= 0.0;
+	Out[ 8]= AxisX[2];	Out[ 9]= AxisY[2];	Out[10]= AxisZ[2];	Out[11]= 0.0;
+
+	Out[12]= -Vec3Dot(Eye, AxisX);
+	Out[13]= -Vec3Dot(Eye, AxisY);
+	Out[14]= -Vec3Dot(Eye, AxisZ);
+	Out[15]= 1.0;
+
+	return Out;
+}
+
+
+
+// global common variable
+
+var gl;											// gl context object
+var mouse = {x: 0, y: 0};						// mouse position
+
+var g_program;									// shader program
+
+var wgb_pos   ;
+var wgi_front ;									// front face
+var wgi_back  ;									// back face
+var wgi_top   ;									// top face
+var wgi_bottom;									// bottom face
+var wgi_left  ;									// left face
+var wgi_right ;									// right face
+
+
+var vtx_pos =
+[
+	-10,-10,-10,  +10,-10,-10, +10,+10,-10, -10,+10,-10,
+	-10,-10,+10,  +10,-10,+10, +10,+10,+10, -10,+10,+10
+];
+
+//      7 +----------+ 6
+//       /|         /|
+//      / |        / |
+//     /  |       /  |
+//  3 +----------+ 2 |
+//    |   |      |   |
+//    | 4 +------|---+ 5
+//    |  /       |  /
+//    | /        | /
+//    |/         |/
+//  0 +----------+ 1
+
+var vix_front = [ 2,1,3,0 ]; // front face
+var vix_back  = [ 5,6,4,7 ]; // back face
+var vix_top   = [ 6,2,7,3 ]; // top face
+var vix_bottom= [ 1,5,0,4 ]; // bottom face
+var vix_left  = [ 3,0,7,4 ]; // left face
+var vix_right = [ 6,5,2,1 ]; // right face
+
+
+
+var cam_pos = [0, 20, 40 ];
+var cam_look= [0, 0,   0 ];
+
+function WebGLInit(native_win)
+{
+	native_win.addEventListener('mousemove', function(e)
+	{
+		var rect = native_win.getBoundingClientRect();
+
+		mouse.x = e.clientX - rect.left;
+		mouse.y = e.clientY - rect.top;
+
+		//document.title= "mouse: " + mouse.x + ", " + mouse.y;
+	}, false);
+
+	window.addEventListener('keydown', function(e)
+	{
+		//document.title= "Keycode: " + e.keyCode;
+
+		if(87 == e.keyCode){ cam_pos [2] += 1.0;	cam_look[2] += 1.0; }	//'W'
+		if(83 == e.keyCode){ cam_pos [2] -= 1.0;	cam_look[2] -= 1.0; }	//'S'
+		if(65 == e.keyCode){ cam_pos [0] -= 1.0;	cam_look[0] -= 1.0; }	//'A'
+		if(68 == e.keyCode){ cam_pos [0] += 1.0;	cam_look[0] += 1.0; }	//'D'
+	}, true);
+
+	setInterval("WebGLRender()", 0);
+
+
+	gl.clearColor(0.0, 0.4, 0.6, 1.0);
+
+
+
+	// create program
+	var shader_vtx = FindShader(gl, "shader-vs");
+	var shader_frg = FindShader(gl, "shader-fs");
+
+	g_program = gl.createProgram();
+	gl.attachShader(g_program, shader_vtx);
+	gl.attachShader(g_program, shader_frg);
+	gl.linkProgram(g_program);
+	if (!gl.getProgramParameter(g_program, gl.LINK_STATUS))
+	{
+		alert("Could not initialise shaders");
+	}
+
+
+	// create VBO and IBO
+	wgb_pos    = gl.createBuffer();	gl.bindBuffer(gl.ARRAY_BUFFER        , wgb_pos   );	gl.bufferData(gl.ARRAY_BUFFER        , new Float32Array(vtx_pos   ), gl.STATIC_DRAW);
+	wgi_front  = gl.createBuffer();	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_front );	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array (vix_front ), gl.STATIC_DRAW);
+	wgi_back   = gl.createBuffer();	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_back  );	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array (vix_back  ), gl.STATIC_DRAW);
+	wgi_top    = gl.createBuffer();	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_top   );	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array (vix_top   ), gl.STATIC_DRAW);
+	wgi_bottom = gl.createBuffer();	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_bottom);	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array (vix_bottom), gl.STATIC_DRAW);
+	wgi_left   = gl.createBuffer();	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_left  );	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array (vix_left  ), gl.STATIC_DRAW);
+	wgi_right  = gl.createBuffer();	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_right );	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array (vix_right ), gl.STATIC_DRAW);
+}
+
+
+
+var angle = 0.0;
+
+var um_Prj = MyGluPerspective(45.0, 800.0/480.0, 1.0, 5000.0);
+
+function WebGLRender()
+{
+	gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	gl.enable( gl.DEPTH_TEST);												// enable depth test
+	gl.enable( gl.CULL_FACE );												// enable culling face
+
+
+	angle += 0.25;
+
+	var rad = angle * Math.PI/180.0;
+	var cosF = Math.cos(-rad);
+	var sinF = Math.sin(-rad);
+
+	var um_Wld =
+	[
+		cosF , 0.0, sinF, 0.0,
+		0.0  , 1.0, 0.0 , 0.0,
+		-sinF, 0.0, cosF, 0.0,
+		0.0  , 0.0, 0.0 , 1.0,
+	];
+
+	//var um_Viw = MyGluLookAt(0, 20, 40, 0,0,0, 0,1,0);
+	var um_Viw = MyGluLookAt(cam_pos[0], cam_pos[1], cam_pos[2], cam_look[0],cam_look[1], cam_look[2], 0,1,0);
+
+	var v0=[1,0,0,1];
+	var v1=[0,1,0,1];
+	var v2=[0,0,1,1];
+	var v3=[1,1,0,1];
+	var v4=[0,1,1,1];
+	var v5=[1,0,1,1];
+
+	var uc_dif = gl.getUniformLocation(g_program, "uc_dif");
+
+
+	gl.useProgram(g_program);
+
+	gl.uniformMatrix4fv(gl.getUniformLocation(g_program, "um_Wld"), false, um_Wld);
+	gl.uniformMatrix4fv(gl.getUniformLocation(g_program, "um_Viw"), false, um_Viw);
+	gl.uniformMatrix4fv(gl.getUniformLocation(g_program, "um_Prj"), false, um_Prj);
+
+
+	gl.enableVertexAttribArray(0);	gl.bindBuffer(gl.ARRAY_BUFFER, wgb_pos);	gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+
+	gl.uniform4fv(uc_dif, v0);	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_front );	gl.drawElements(gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_SHORT, 0);
+	gl.uniform4fv(uc_dif, v1);	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_back  );	gl.drawElements(gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_SHORT, 0);
+	gl.uniform4fv(uc_dif, v2);	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_top   );	gl.drawElements(gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_SHORT, 0);
+	gl.uniform4fv(uc_dif, v3);	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_bottom);	gl.drawElements(gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_SHORT, 0);
+	gl.uniform4fv(uc_dif, v4);	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_left  );	gl.drawElements(gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_SHORT, 0);
+	gl.uniform4fv(uc_dif, v5);	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wgi_right );	gl.drawElements(gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_SHORT, 0);
+
+
+	gl.disableVertexAttribArray(0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+	gl.useProgram(null);
+
+	gl.flush();
+}
+
+
+function WebGLStart()
+{
+	document.body.style.border  = 'none';
+	document.body.style.margin  = '0';
+	document.body.style.padding = '0';
+
+	var native_win = document.createElement("canvas");
+	native_win.width  = 800;
+	native_win.height = 480;
+	document.body.appendChild(native_win);
+
+	try
+	{
+		gl = native_win.getContext("experimental-webgl");
+		gl.viewportWidth  = native_win.width;
+		gl.viewportHeight = native_win.height;
+	}
+	catch (e){}
+
+	if (!gl)
+	{
+		alert("Could not initialise WebGL. check the browser");
+		return;
+	}
+
+	WebGLInit(native_win);
+}
+</script>
+</head>
+
+<body onload="WebGLStart();">
+</body>
+</html>

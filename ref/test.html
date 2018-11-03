@@ -1,0 +1,37 @@
+<HTML>
+<HEAD>
+
+<SCRIPT>
+
+function Start()
+{
+	var native_win = document.getElementById("canvas");
+
+	native_win.addEventListener('mousemove', function(e)
+	{
+		var rect = native_win.getBoundingClientRect();
+
+		var x = e.clientX - rect.left;
+		var y = e.clientY - rect.top;
+
+		document.title= "mouse: " + x + ", " + y;
+	}, false);
+
+
+	native_win.addEventListener('keydown', function(e)
+	{
+		document.title= "Keycode: " + e.keyCode;
+	}, false);
+}
+
+</SCRIPT>
+
+</HEAD>
+
+<BODY onload="Start();">
+
+<CANVAS id="canvas" WIDTH="1500" HEIGHT="1400" tabindex="0"></CANVAS>
+
+
+</BODY>
+</HTML>

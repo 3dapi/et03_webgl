@@ -1,0 +1,184 @@
+<html>
+<head>
+<title>GLC WebGL</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script language="javascript" type="text/javascript" src="./webgl_util.js"></script>
+<script language="javascript" type="text/javascript" src="rsc/gsd_geo.js"></script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+	attribute vec4      at_pos;									//  1
+	attribute vec2      at_tex;									//  2
+																//  3
+	varying   vec2      vr_tex;									//  4
+																//  5
+	void main() {												//  6
+		gl_Position = at_pos;									//  7
+																//  8
+		vr_tex = at_tex;										//  9
+	}
+</script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision highp float;										//  1
+																//  2
+	varying   vec2      vr_tex;									//  3
+																//  4
+	uniform   sampler2D us_tex;									//  5
+	uniform   vec2      uc_trs;									//  6
+																//  7
+	const     vec4      dif0 = vec4(1.0, 0.5, 0.1, 0.8);		//  8
+	const     vec4      dif1 = vec4(0.1, 1.0, 0.1, 0.1);		//  9
+	const     vec4      dif2 = vec4(0.1, 0.4, 0.8, 0.2);		// 10
+																//  1
+	void main() {												//  2
+																//  3
+		vec2	tx0 = vr_tex + vec2(uc_trs.x, 0.0);				//  4
+		vec2	tx1 = vr_tex + vec2(0.0, uc_trs.y);				//  5
+		vec2	tx2 = vr_tex + uc_trs * 4.5;					//  6
+																//  7
+		vec4    col0 = dif0 * texture2D(us_tex, tx0).r;			//  8
+		vec4    col1 = dif1 * texture2D(us_tex, tx1).g;			//  9
+		vec4    col2 = dif2 * texture2D(us_tex, tx2).b;			// 20
+																//  1
+		gl_FragColor = col0 + col1 + col2;						//  2
+	}															//
+</script>
+
+
+<script type="text/javascript">
+
+// global common variable
+
+var gl;											// gl context object
+var mouse = {x: 0, y: 0};						// mouse position
+
+var g_program;									// shader program
+
+var vbo_pos;
+var vbo_tex;
+
+var tex_cloud;
+var tex_lamplight;
+
+var vtx_pos =
+[
+	-1.0, -1.0,
+	+1.0, -1.0,
+	+1.0, +1.0,
+	-1.0, +1.0,
+];
+
+var vtx_tex =
+[
+	 0.0, 1.0,
+	 1.0, 1.0,
+	 1.0, 0.0,
+	 0.0, 0.0,
+];
+
+
+function WebGLInit(native_win)
+{
+	native_win.addEventListener('mousemove', function(e)
+	{
+		var rect = native_win.getBoundingClientRect();
+
+		mouse.x = e.clientX - rect.left;
+		mouse.y = e.clientY - rect.top;
+
+		//document.title= "mouse: " + mouse.x + ", " + mouse.y;
+	}, false);
+
+	window.addEventListener('keydown', function(e)
+	{
+		//document.title= "Keycode: " + e.keyCode;
+	}, true);
+
+	setInterval("WebGLRender()", 0);
+
+	gl.clearColor(0.0, 0.4, 0.6, 1.0);
+
+
+	// create program
+	g_program = CreateProgram(gl, "shader-vs", "shader-fs");
+	if(null == g_program)
+		return;
+
+
+	// create VBO
+	vbo_pos  = CreateVbo(gl, vtx_pos );
+	vbo_tex  = CreateVbo(gl, vtx_tex );
+
+
+	// create toon texture
+	tex_cloud    = CreateTexture("rsc/cloud.png");
+}
+
+
+var trs_x = 0.0;
+var trs_y = 0.0;
+
+function WebGLRender()
+{
+	gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	gl.enable( gl.DEPTH_TEST);
+	gl.disable( gl.CULL_FACE);
+
+
+	gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+	gl.enable(gl.BLEND);
+
+	trs_x += 0.00004;
+	trs_y += 0.00002;
+
+	var uc_trs = [trs_x, trs_y];
+
+
+	UsePrgram(gl, g_program);
+
+	ActiveTexture(gl, g_program, tex_cloud   , 0, "us_tex");
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+
+	UniformVec2(gl, g_program, "uc_trs", uc_trs);	
+
+
+
+	AttributeStream(gl, 0, vbo_pos, 2);
+	AttributeStream(gl, 1, vbo_tex, 2);
+
+	DrawArray(gl, gl.TRIANGLE_FAN, 0, 4);
+
+	AttributeStream(gl, 0, null, 0);
+	AttributeStream(gl, 1, null, 0);
+
+	ActiveTexture(gl, g_program, null, 0);
+
+	UsePrgram(gl, null);
+
+	gl.flush();
+}
+
+
+function WebGLStart()
+{
+	var native_win = CreateNativeWindow("canvas", 800, 480);
+
+	gl = CreateContext(native_win);
+	if(!gl)
+	{
+		alert("Could not initialise WebGL. check the browser");
+		return;
+	}
+
+	WebGLInit(native_win);
+}
+</script>
+</head>
+
+<body onload="WebGLStart();">
+</body>
+</html>
