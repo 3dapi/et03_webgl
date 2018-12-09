@@ -112,7 +112,7 @@ function WebGLInit(native_win)
 
 
 	// create toon texture
-	tex_cloud    = CreateTexture("rsc/cloud.png");
+	tex_cloud    = CreateTexture("https://raw.githubusercontent.com/3dapi/et03_webgl/master/rsc/cloud.png");
 }
 
 
@@ -143,7 +143,7 @@ function WebGLRender()
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
 
-	UniformVec2(gl, g_program, "uc_trs", uc_trs);	
+	UniformVec2(gl, g_program, "uc_trs", uc_trs);
 
 
 
